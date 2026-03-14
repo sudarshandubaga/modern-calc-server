@@ -42,7 +42,7 @@ switch ($action) {
         $start_date = isset($_GET['start_date']) ? $_GET['start_date'] : date('Y-m-d');
         $end_date = isset($_GET['end_date']) ? $_GET['end_date'] : date('Y-m-d');
         
-        $sql = "SELECT * FROM " . DB_PREFIX . "transactions WHERE date BETWEEN ? AND ? ORDER BY date DESC, created_at DESC";
+        $sql = "SELECT * FROM " . DB_PREFIX . "transactions WHERE is_deleted = 0 AND date BETWEEN ? AND ? ORDER BY date DESC, created_at DESC";
         $stmt = $conn->prepare($sql);
         $stmt->bind_param("ss", $start_date, $end_date);
         $stmt->execute();
@@ -57,7 +57,7 @@ switch ($action) {
         $sqlSum = "SELECT 
                     SUM(CASE WHEN type = 'credit' THEN amount ELSE 0 END) as total_credit,
                     SUM(CASE WHEN type = 'debit' THEN amount ELSE 0 END) as total_debit
-                   FROM " . DB_PREFIX . "transactions";
+                   FROM " . DB_PREFIX . "transactions WHERE is_deleted = 0";
         $sumResult = $conn->query($sqlSum);
         $summary = $sumResult->fetch_assoc();
         
@@ -74,7 +74,6 @@ switch ($action) {
 
     case 'add_transaction':
         $data = json_decode(file_get_contents("php://input"));
-        
         if(!empty($data->title) && !empty($data->amount) && !empty($data->type) && !empty($data->date)) {
             $sql = "INSERT INTO " . DB_PREFIX . "transactions (title, amount, type, date, category) VALUES (?, ?, ?, ?, ?)";
             $stmt = $conn->prepare($sql);
@@ -87,6 +86,67 @@ switch ($action) {
             }
         } else {
             echo json_encode(["status" => "error", "message" => "Incomplete data"]);
+        }
+        break;
+
+    case 'edit_transaction':
+        $data = json_decode(file_get_contents("php://input"));
+        if(!empty($data->id) && !empty($data->title) && !empty($data->amount) && !empty($data->type) && !empty($data->date)) {
+            $sql = "UPDATE " . DB_PREFIX . "transactions SET title=?, amount=?, type=?, date=?, category=? WHERE id=?";
+            $stmt = $conn->prepare($sql);
+            $stmt->bind_param("sdsssi", $data->title, $data->amount, $data->type, $data->date, $data->category, $data->id);
+            
+            if($stmt->execute()) {
+                echo json_encode(["status" => "success", "message" => "Transaction updated successfully"]);
+            } else {
+                echo json_encode(["status" => "error", "message" => "Failed to update transaction"]);
+            }
+        } else {
+            echo json_encode(["status" => "error", "message" => "Incomplete data"]);
+        }
+        break;
+
+    case 'delete_transaction':
+        $id = isset($_GET['id']) ? $_GET['id'] : '';
+        if(!empty($id)) {
+            $sql = "UPDATE " . DB_PREFIX . "transactions SET is_deleted = 1 WHERE id = ?";
+            $stmt = $conn->prepare($sql);
+            $stmt->bind_param("i", $id);
+            if($stmt->execute()) {
+                echo json_encode(["status" => "success", "message" => "Moved to bin"]);
+            } else {
+                echo json_encode(["status" => "error", "message" => "Failed to delete"]);
+            }
+        }
+        break;
+
+    case 'get_deleted_transactions':
+        $sql = "SELECT * FROM " . DB_PREFIX . "transactions WHERE is_deleted = 1 ORDER BY date DESC, created_at DESC";
+        $result = $conn->query($sql);
+        $transactions = [];
+        while($row = $result->fetch_assoc()) { $transactions[] = $row; }
+        echo json_encode(["status" => "success", "data" => $transactions]);
+        break;
+
+    case 'restore_transaction':
+        $id = isset($_GET['id']) ? $_GET['id'] : '';
+        if(!empty($id)) {
+            $sql = "UPDATE " . DB_PREFIX . "transactions SET is_deleted = 0 WHERE id = ?";
+            $stmt = $conn->prepare($sql);
+            $stmt->bind_param("i", $id);
+            if($stmt->execute()) { echo json_encode(["status" => "success", "message" => "Restored"]); }
+            else { echo json_encode(["status" => "error", "message" => "Failed"]); }
+        }
+        break;
+
+    case 'permanent_delete_transaction':
+        $id = isset($_GET['id']) ? $_GET['id'] : '';
+        if(!empty($id)) {
+            $sql = "DELETE FROM " . DB_PREFIX . "transactions WHERE id = ?";
+            $stmt = $conn->prepare($sql);
+            $stmt->bind_param("i", $id);
+            if($stmt->execute()) { echo json_encode(["status" => "success", "message" => "Deleted permanently"]); }
+            else { echo json_encode(["status" => "error", "message" => "Failed"]); }
         }
         break;
 
