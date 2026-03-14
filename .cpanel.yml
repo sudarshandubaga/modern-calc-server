@@ -1,5 +1,5 @@
 ---
 deployment:
   tasks:
-    - export DEPLOY_PATH=/home/thexpert/rtportfolios.ml/modern-calc-server/
+    - export DEPLOY_PATH=/home1/rudrarmq/rtportfolios.ml/modern-calc-server/
     - /bin/cp -R * $DEPLOY_PATH
